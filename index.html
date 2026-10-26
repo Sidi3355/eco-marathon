@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eco-Marathon Driver Information System</title>
+<meta name="description" content="Driver information system proposal for the Imperial Eco-Marathon battery-electric prototype: Hall wheel speed, GPS laps, pace and strategy cues, independent 18650 supply.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Identity: engineering drawing sheet + instrument panel. Barlow for display and body, IBM Plex Mono for readouts and numerics. */
+:root {
+  --bg:#e9ecea; --surface:#f5f7f5; --fg:#151c1a; --muted:#5a6461; --line:#c2c9c5; --line-strong:#6b7572;
+  --accent:#a66200; --accent-fill:#e0981c; --accent-soft:#f3e4c8;
+  --lcd:#cdd5c6; --lcd-ink:#1b241f; --lcd-dim:#6f7a70; --bezel:#2a302d;
+  --led-g:#2f9b4a; --led-a:#e0981c; --led-r:#d13a2a;
+  --in:#dbe8e9; --in-ink:#1d5560; --mcu:#f3e4c8; --mcu-ink:#6b3f00; --out:#e3e3ea; --out-ink:#3a3f66; --pwr:#dcdfdb; --pwr-ink:#363b39;
+  --code-bg:#151c1a; --code-fg:#dfe5e1;
+  --display:'Barlow', 'Helvetica Neue', Arial, sans-serif; --mono:'IBM Plex Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#0e1211; --surface:#161b19; --fg:#dde3df; --muted:#919b96; --line:#2b3330; --line-strong:#6c7772;
+  --accent:#f0b23c; --accent-fill:#d9961c; --accent-soft:#2f2612;
+  --lcd:#1a221e; --lcd-ink:#d6e2cf; --lcd-dim:#7d8a80; --bezel:#3b4541;
+  --led-g:#4ec36a; --led-a:#f0b23c; --led-r:#ef5a48;
+  --in:#13303a; --in-ink:#9fd3de; --mcu:#2f2612; --mcu-ink:#f0c877; --out:#23253a; --out-ink:#b7bce6; --pwr:#20262a; --pwr-ink:#c4cbc8;
+  --code-bg:#090c0b; --code-fg:#dde3df; color-scheme:dark } }
+:root[data-theme="dark"] {
+  --bg:#0e1211; --surface:#161b19; --fg:#dde3df; --muted:#919b96; --line:#2b3330; --line-strong:#6c7772;
+  --accent:#f0b23c; --accent-fill:#d9961c; --accent-soft:#2f2612;
+  --lcd:#1a221e; --lcd-ink:#d6e2cf; --lcd-dim:#7d8a80; --bezel:#3b4541;
+  --led-g:#4ec36a; --led-a:#f0b23c; --led-r:#ef5a48;
+  --in:#13303a; --in-ink:#9fd3de; --mcu:#2f2612; --mcu-ink:#f0c877; --out:#23253a; --out-ink:#b7bce6; --pwr:#20262a; --pwr-ink:#c4cbc8;
+  --code-bg:#090c0b; --code-fg:#dde3df; color-scheme:dark }
+
+* { box-sizing:border-box }
+body { background:var(--bg); color:var(--fg); font-family:var(--display); font-size:17px; line-height:1.55; margin:0;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:0 56px;
+  font-feature-settings:"tnum" 1; }
+.wrap { max-width:1120px; margin:0 auto; display:grid; grid-template-columns:176px minmax(0,1fr); gap:0 44px; }
+@media (max-width:860px) { .wrap { grid-template-columns:minmax(0,1fr); gap:0 } nav.toc { position:static; margin:0 0 28px; padding:0 } nav.toc ol { display:flex; flex-wrap:wrap; gap:4px 14px } nav.toc a { border-left:0; padding:2px 0 } nav.toc a span { margin-right:4px } }
+a { color:var(--accent) }
+
+/* Hero: a drawing sheet frame with a title block along the foot. */
+header.sheet-head { grid-column:1 / -1; margin:28px 0 40px; border:2px solid var(--fg); background:var(--surface); }
+.sheet-top { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:28px; padding:26px 28px 24px; align-items:center }
+@media (max-width:760px) { .sheet-top { grid-template-columns:minmax(0,1fr); padding:20px 18px 18px } }
+.sheet-top > div { min-width:0 }
+.project { font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:0 0 14px }
+h1 { font-size:clamp(34px, 6vw, 62px); line-height:.98; margin:0 0 16px; font-weight:700; letter-spacing:-.02em; text-wrap:balance; font-stretch:semi-condensed }
+h1 span { display:block; font-weight:400; font-size:.5em; letter-spacing:0; color:var(--muted); margin-top:10px; line-height:1.25 }
+.lede { margin:0; max-width:48ch; font-size:17px; color:var(--fg) }
+
+.dash { display:grid; grid-template-columns:minmax(0,1fr) 22px; gap:14px; align-items:center; justify-self:end; width:100%; max-width:380px }
+@media (max-width:760px) { .dash { justify-self:start } }
+.lcd { aspect-ratio:400 / 240; background:var(--lcd); color:var(--lcd-ink); border:6px solid var(--bezel); border-radius:3px;
+  font-family:var(--mono); display:grid; grid-template-rows:auto 1fr auto auto; padding:5% 6%; container-type:inline-size; min-width:0 }
+.lcd .row { display:flex; justify-content:space-between; gap:8px; font-size:clamp(9px, 5cqw, 13px); line-height:1.2; white-space:nowrap }
+.lcd .row.dim { color:var(--lcd-dim) }
+.lcd .big { display:flex; align-items:baseline; gap:4cqw; align-self:center; line-height:1 }
+.lcd .big b { font-size:clamp(34px, 24cqw, 68px); font-weight:500; letter-spacing:-.03em }
+.lcd .big i { font-style:normal; font-size:clamp(9px, 5cqw, 13px); color:var(--lcd-dim) }
+.lcd .row + .row { margin-top:1.5cqw }
+.leds { display:grid; gap:10px; align-content:center }
+.leds i { display:block; width:14px; height:14px; border-radius:50%; border:2px solid var(--bezel); background:var(--pwr) }
+.leds i.on-g { background:var(--led-g) } .leds i.off-a { background:var(--led-a); opacity:.25 } .leds i.off-r { background:var(--led-r); opacity:.25 }
+
+.tblock { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); border-top:2px solid var(--fg) }
+.tblock div { padding:9px 14px; border-right:1px solid var(--line-strong); min-width:0 }
+.tblock div:last-child { border-right:0 }
+.tblock .k { display:block; font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:2px }
+.tblock .v { display:block; font-size:15px; font-weight:600; line-height:1.3 }
+@media (max-width:620px) { .tblock { grid-template-columns:repeat(2, minmax(0,1fr)) } .tblock div:nth-child(2) { border-right:0 } .tblock div:nth-child(-n+2) { border-bottom:1px solid var(--line-strong) } }
+
+/* Contents rail, drawn like a sheet's zone column. */
+nav.toc { position:sticky; top:env(safe-area-inset-top, 0px); align-self:start; padding-top:6px; font-size:14px }
+nav.toc ol { list-style:none; padding:0; margin:0; display:grid; gap:2px }
+nav.toc a { color:var(--muted); text-decoration:none; display:flex; gap:10px; padding:3px 0 3px 12px; border-left:2px solid var(--line); min-width:0 }
+nav.toc a span { font-family:var(--mono); font-size:12px; color:var(--line-strong) }
+nav.toc a:hover, nav.toc a:focus-visible { color:var(--fg); border-color:var(--accent-fill); outline:none }
+nav.toc a:hover span, nav.toc a:focus-visible span { color:var(--accent) }
+
+main { min-width:0 }
+section { margin-bottom:48px }
+h2 { display:flex; align-items:center; gap:14px; font-size:24px; margin:0 0 16px; font-weight:600; letter-spacing:-.01em; line-height:1.15 }
+h2 small { font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:500; border:1px solid var(--accent-fill); padding:2px 7px; flex:none }
+h2::after { content:""; flex:1; height:1px; background:var(--line); min-width:24px }
+h3 { font-size:17px; margin:24px 0 6px; font-weight:600 }
+p { max-width:66ch; margin:0 0 12px }
+
+table { border-collapse:collapse; width:100%; font-size:15px; margin:12px 0 16px; border-top:2px solid var(--fg) }
+th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top }
+th { font-family:var(--mono); font-size:12px; color:var(--muted); font-weight:500; border-bottom:1px solid var(--line-strong) }
+td:first-child { font-weight:600; white-space:nowrap }
+td.num { font-family:var(--mono); font-size:14px; text-align:right; white-space:nowrap }
+th.num { text-align:right }
+tr.total td { border-top:2px solid var(--fg); border-bottom:0; font-weight:600 }
+tr.total td.num { font-weight:600 }
+.scroll { overflow-x:auto }
+.budget td.bar { width:34%; padding-top:14px; min-width:120px }
+.budget td.bar i { display:block; height:8px; width:var(--w); background:var(--accent-fill); min-width:2px }
+.budget tr.total td.bar i { background:var(--fg) }
+.bom td:nth-child(2) { font-family:var(--mono); font-size:13.5px }
+
+/* Figures as drawing sheets with a title block caption. */
+figure { margin:16px 0 24px; border:1.5px solid var(--fg); background:var(--surface); padding:0 }
+figure .plate { padding:14px }
+figure img { display:block; width:100%; max-width:100%; height:auto }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) figure img.sheet { filter:invert(.92) hue-rotate(180deg) } }
+:root[data-theme="dark"] figure img.sheet { filter:invert(.92) hue-rotate(180deg) }
+figcaption { border-top:1.5px solid var(--fg); display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; font-size:13px }
+figcaption span { padding:7px 12px; border-right:1px solid var(--line-strong); min-width:0 }
+figcaption span:last-child { border-right:0 }
+figcaption .no { font-family:var(--mono); font-weight:500 }
+figcaption .ti { font-weight:600 }
+figcaption .me { font-family:var(--mono); color:var(--muted); font-size:12px; white-space:nowrap }
+@media (max-width:620px) { figcaption { grid-template-columns:auto minmax(0,1fr) } figcaption .me { display:none } }
+svg.block { width:100%; height:auto; max-width:100% }
+.svg-h { font-family:var(--display); font-size:13px; font-weight:600 }
+.svg-s { font-family:var(--display); font-size:11.5px }
+.svg-cap { font-family:var(--mono); font-size:10.5px; fill:var(--muted) }
+.n-in rect { fill:var(--in); stroke:var(--in-ink); stroke-width:.8 } .n-in text { fill:var(--in-ink) }
+.n-mcu rect { fill:var(--mcu); stroke:var(--mcu-ink); stroke-width:.8 } .n-mcu text { fill:var(--mcu-ink) }
+.n-out rect { fill:var(--out); stroke:var(--out-ink); stroke-width:.8 } .n-out text { fill:var(--out-ink) }
+.n-pwr rect { fill:var(--pwr); stroke:var(--pwr-ink); stroke-width:.8 } .n-pwr text { fill:var(--pwr-ink) }
+
+/* Displayed fields: a legend for the readout, name, source channel, purpose. */
+.fields { border-top:2px solid var(--fg); margin:0 0 18px }
+.field { display:grid; grid-template-columns:190px minmax(0,1fr); gap:2px 20px; border-bottom:1px solid var(--line); padding:13px 0 }
+.field > div { min-width:0 }
+.field b { display:block; font-size:18px; font-weight:600; line-height:1.2 }
+.field .src { display:block; font-family:var(--mono); font-size:11.5px; color:var(--muted); margin-top:4px }
+.field p { margin:0; font-size:16px }
+@media (max-width:560px) { .field { grid-template-columns:minmax(0,1fr); gap:6px } .field .src { margin-top:2px } }
+.callout { border:1px solid var(--accent-fill); border-left-width:6px; background:var(--accent-soft); padding:12px 16px; margin:16px 0; max-width:66ch; font-size:16px }
+
+details { border:1px solid var(--line-strong); margin:10px 0; background:var(--surface) }
+summary { cursor:pointer; padding:10px 14px; font-family:var(--mono); font-weight:500; font-size:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:baseline; list-style:none }
+summary::-webkit-details-marker { display:none }
+summary::before { content:"+"; width:1em; color:var(--accent); font-weight:500 }
+details[open] summary::before { content:"-" }
+details[open] summary { border-bottom:1px solid var(--line-strong) }
+summary:focus-visible { outline:2px solid var(--accent-fill); outline-offset:2px }
+summary code { font-family:var(--display); font-weight:400; font-size:14px; color:var(--muted) }
+pre { margin:0; background:var(--code-bg); color:var(--code-fg); padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:12.5px; line-height:1.5; tab-size:2 }
+code.i { font-family:var(--mono); font-size:.88em; background:var(--pwr); padding:1px 5px }
+
+/* Battery summary: a readout strip, not cards. */
+.kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); border-top:2px solid var(--fg); border-bottom:1px solid var(--line); margin:16px 0 18px }
+.kv div { padding:10px 14px 10px 0; border-right:1px solid var(--line); min-width:0 }
+.kv div + div { padding-left:14px }
+.kv div:last-child { border-right:0 }
+.kv .k { font-family:var(--mono); font-size:11.5px; color:var(--muted) }
+.kv .v { font-family:var(--mono); font-size:24px; font-weight:500; margin-top:2px; letter-spacing:-.02em; white-space:nowrap }
+.kv .u { font-size:13px; color:var(--muted); font-weight:400; margin-left:2px }
+footer { grid-column:1 / -1; border-top:2px solid var(--fg); padding-top:12px; font-size:13px; color:var(--muted); display:flex; justify-content:space-between; gap:12px 24px; flex-wrap:wrap; font-family:var(--mono) }
+footer span { min-width:0 }
+@media (prefers-reduced-motion: no-preference) { nav.toc a, summary::before { transition:color .15s, border-color .15s } }
+svg.sch { width:100%; height:auto; display:block; font-family:var(--display) }
+.sch .wr { fill:none; stroke:var(--fg); stroke-width:1.3; stroke-linejoin:round }
+.sch .pl, .sch .gd line { stroke:var(--fg); stroke-width:1.6 }
+.sch .plt { stroke:var(--fg); stroke-width:3.2 }
+.sch .cp, .sch .bx { fill:var(--surface); stroke:var(--fg); stroke-width:1.4 }
+.sch .cpf { fill:var(--fg); stroke:var(--fg); stroke-width:1 }
+.sch .jn { fill:var(--fg) }
+.sch .oc { fill:var(--surface); stroke:var(--fg); stroke-width:1.3 }
+.sch .nf { fill:var(--accent-soft); stroke:var(--accent); stroke-width:1 }
+.sch .nl { font-family:var(--mono); font-size:11px; fill:var(--fg) }
+.sch .sl, .sch .sv { font-size:11.5px; fill:var(--muted) }
+.sch .pn { font-family:var(--mono); font-size:11.5px; fill:var(--fg) }
+.sch .sh { font-size:15px; font-weight:600; fill:var(--fg) }
+.sch .sh2 { font-size:13px; font-weight:600; fill:var(--fg) }
+.sch .zone { fill:none; stroke:var(--line-strong); stroke-dasharray:5 4 }
+.sch .zl { font-family:var(--mono); font-size:11px; fill:var(--accent) }
+.sch .sep { stroke:var(--line); stroke-width:1 }
+.sch .cable { fill:none; stroke:var(--fg); stroke-width:1.3; stroke-dasharray:6 3 }
+.lcd .big .cue { margin-left:auto; font-size:clamp(9px, 5cqw, 13px); border:1.5px solid var(--lcd-ink); padding:2px 5px; line-height:1.3; text-align:center }
+.callout.ok { border-color:var(--led-g) }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="sheet-head">
+  <div class="sheet-top">
+    <div>
+      <p class="project">Imperial Eco-Marathon, electronics application task</p>
+      <h1>Driver information system<span>for the battery-electric prototype</span></h1>
+      <p class="lede">A tiller-mounted dash that tells the driver one thing above all: whether the average speed will finish the attempt inside the time limit.</p>
+    </div>
+    <div class="dash" aria-label="Mock-up of the dash readout">
+      <div class="lcd" role="img" aria-label="Memory LCD mock-up showing lap 7 of 10, speed 28.4 km/h, average 25.1 against a 25.0 minimum, last lap 1.2 seconds under target, strategy cue glide for 320 metres, battery 4.08 volts, 11 satellites, SD logging on">
+        <div class="row"><span>LAP 07/10</span><span>12:34.5</span></div>
+        <div class="big"><b>28.4</b><i>km/h</i><span class="cue">GLIDE<br>320 m</span></div>
+        <div class="row"><span>AVG 25.1</span><span>MIN 25.0</span><span>&Delta; -1.2s</span></div>
+        <div class="row dim"><span>4.08V</span><span>SAT 11</span><span>SD &#9679;</span><span>REM 27:25</span></div>
+      </div>
+      <div class="leds" aria-hidden="true"><i class="off-r"></i><i class="off-a"></i><i class="on-g"></i></div>
+    </div>
+  </div>
+  <div class="tblock">
+    <div><span class="k">Drawn by</span><span class="v">Siddarth Oruganti</span></div>
+    <div><span class="k">Course</span><span class="v">EEE first year, Imperial College London</span></div>
+    <div><span class="k">Date</span><span class="v">October 2026</span></div>
+    <div><span class="k">Document</span><span class="v">Proposal, 2 schematic sheets, firmware</span></div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents"><ol>
+<li><a href="#summary"><span>00</span>Summary</a></li>
+<li><a href="#assumptions"><span>01</span>Assumptions</a></li>
+<li><a href="#fields"><span>02</span>Displayed fields</a></li>
+<li><a href="#measurement"><span>03</span>Measurements</a></li>
+<li><a href="#components"><span>04</span>Components</a></li>
+<li><a href="#battery"><span>05</span>Battery</a></li>
+<li><a href="#install"><span>06</span>Installation</a></li>
+<li><a href="#testing"><span>07</span>Reliability testing</a></li>
+<li><a href="#integration"><span>08</span>Integration</a></li>
+<li><a href="#schematics"><span>09</span>Schematics</a></li>
+<li><a href="#firmware"><span>10</span>Firmware</a></li>
+</ol></nav>
+
+<main>
+<section id="summary">
+<h2><small>00</small>Summary</h2>
+<p>A self-contained dash unit that measures wheel speed with a Hall sensor on a non-driven wheel, adds GPS for lap and position, and shows the driver the one thing that wins an Eco-marathon attempt: whether their average speed is on course to finish inside the time limit. It runs from a single 18650 cell for a full race weekend, logs everything to microSD for post-attempt strategy, and makes no connection to the motor controller or propulsion wiring.</p>
+<figure><div class="plate">
+<svg viewBox="0 0 680 500" role="img" aria-labelledby="bdt" class="block">
+<title id="bdt">System block diagram</title>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--line-strong)" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+<rect x="248" y="18" width="184" height="384" rx="10" fill="none" stroke="var(--line)" stroke-dasharray="4 3"/>
+<text x="340" y="36" class="svg-cap" text-anchor="middle">Dash unit, IP54 enclosure</text>
+<g class="n-in"><rect x="40" y="60" width="180" height="52" rx="6"/><text x="130" y="80" text-anchor="middle" class="svg-h">Wheel speed sensor</text><text x="130" y="98" text-anchor="middle" class="svg-s">DRV5023 Hall + 4 magnets</text></g>
+<g class="n-in"><rect x="40" y="150" width="180" height="52" rx="6"/><text x="130" y="170" text-anchor="middle" class="svg-h">GPS module</text><text x="130" y="188" text-anchor="middle" class="svg-s">u-blox M10, 10 Hz</text></g>
+<g class="n-in"><rect x="40" y="240" width="180" height="52" rx="6"/><text x="130" y="260" text-anchor="middle" class="svg-h">Driver buttons</text><text x="130" y="278" text-anchor="middle" class="svg-s">Lap mark, page, reset</text></g>
+<g class="n-mcu"><rect x="260" y="60" width="160" height="232" rx="6"/><text x="340" y="160" text-anchor="middle" class="svg-h">ESP32-S3 MCU</text><text x="340" y="180" text-anchor="middle" class="svg-s">Pulse timing, logging</text><text x="340" y="198" text-anchor="middle" class="svg-s">Lap and pace logic</text></g>
+<g class="n-out"><rect x="460" y="60" width="180" height="52" rx="6"/><text x="550" y="80" text-anchor="middle" class="svg-h">Sunlight LCD</text><text x="550" y="98" text-anchor="middle" class="svg-s">2.7 in Sharp memory LCD</text></g>
+<g class="n-out"><rect x="460" y="150" width="180" height="52" rx="6"/><text x="550" y="170" text-anchor="middle" class="svg-h">Pace cue LED</text><text x="550" y="188" text-anchor="middle" class="svg-s">Coast / hold / burn</text></g>
+<g class="n-out"><rect x="460" y="240" width="180" height="52" rx="6"/><text x="550" y="260" text-anchor="middle" class="svg-h">microSD logger</text><text x="550" y="278" text-anchor="middle" class="svg-s">10 Hz CSV, post-race</text></g>
+<g class="n-pwr"><rect x="260" y="330" width="160" height="52" rx="6"/><text x="340" y="350" text-anchor="middle" class="svg-h">Aux power</text><text x="340" y="368" text-anchor="middle" class="svg-s">18650 + buck-boost 3.3 V</text></g>
+<g stroke="var(--line-strong)" stroke-width="1.2" fill="none" marker-end="url(#ar)">
+<line x1="220" y1="86" x2="252" y2="86"/><line x1="220" y1="176" x2="252" y2="176"/><line x1="220" y1="266" x2="252" y2="266"/>
+<line x1="420" y1="86" x2="452" y2="86"/><line x1="420" y1="176" x2="452" y2="176"/><line x1="420" y1="266" x2="452" y2="266"/>
+<line x1="340" y1="330" x2="340" y2="300"/>
+</g>
+<line x1="20" y1="425" x2="660" y2="425" stroke="var(--led-r)" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="340" y="418" class="svg-cap" text-anchor="middle" style="fill:var(--led-r)">isolation boundary: no wire crosses this line</text>
+<rect x="40" y="440" width="600" height="44" rx="6" fill="none" stroke="var(--line-strong)" stroke-dasharray="3 3"/>
+<text x="340" y="459" text-anchor="middle" class="svg-s" style="fill:var(--muted)">Propulsion system: traction battery, joulemeter, motor controller, motor</text>
+<text x="340" y="475" text-anchor="middle" class="svg-cap">Not connected. Separate battery, separate ground, cables routed on the opposite side.</text>
+</svg>
+</div><figcaption><span class="no">Fig. 1</span><span class="ti">System block diagram. Inputs left, outputs right, everything in the dashed box lives in one enclosure on the tiller. Nothing connects to the propulsion system below the red line.</span><span class="me">S. Oruganti</span><span class="me">Oct 2026</span></figcaption></figure>
+</section>
+
+<section id="assumptions">
+<h2><small>01</small>Assumptions</h2>
+<p>Shell Eco-marathon prototype, battery-electric category. The attempt is a fixed number of laps inside a time limit, so the driver's job is pacing: meet the minimum average speed using the least energy.</p>
+<p>Auxiliary batteries are permitted for ancillary electronics (the rules on chemistry and energy cap are listed under Integration as things to confirm). Non-contact sensing near propulsion wiring is acceptable; any galvanic connection to the motor controller is not. The front wheels are non-driven and accessible for magnets. A race day involves four to six hours of powered-on time including practice sessions.</p>
+</section>
+
+<section id="fields">
+<h2><small>02</small>Displayed fields and why</h2>
+<div class="fields">
+<div class="field"><div><b>Speed</b><span class="src">Hall sensor, GPS cross-check</span></div><p>Required. Large digits, from the Hall sensor, cross-checked by GPS. Smoothed with a short exponential filter so the digits do not flicker.</p></div>
+<div class="field"><div><b>Average speed vs minimum</b><span class="src">Computed, distance / elapsed</span></div><p>The most useful number on the screen. It tells the driver directly whether they can afford to coast for longer or need to burn.</p></div>
+<div class="field"><div><b>Lap, lap time, delta</b><span class="src">GPS geofence, button backup</span></div><p>Current lap number out of the total, the running lap time, and the last lap's delta against the target lap time. This turns pacing into something the driver can act on each lap.</p></div>
+<div class="field"><div><b>Elapsed and remaining</b><span class="src">MCU timer</span></div><p>When a lap goes wrong, through traffic or a slow car ahead, the driver needs the clock to decide how hard to recover.</p></div>
+<div class="field"><div><b>Strategy cue</b><span class="src">Lap distance from Hall pulses</span></div><p>"BURN" or "GLIDE" with the metres to the next change, from a burn-and-glide plan stored per track (where to accelerate, where to coast). Most of the energy in an Eco-marathon is won or lost here, and a plan the driver can see beats one they have to remember.</p></div>
+<div class="field"><div><b>Pace cue LED</b><span class="src">Projected finish time, with hysteresis</span></div><p>Green for coast, amber for hold, red for burn, in peripheral vision so eyes stay on the track. Driven by the projected finish time at the current average.</p></div>
+<div class="field"><div><b>Distance</b><span class="src">Hall pulse count</span></div><p>Confirms the lap count if a start-line crossing is missed.</p></div>
+<div class="field"><div><b>System health</b><span class="src">ADC, GPS, SD status</span></div><p>Aux battery voltage, GPS satellite count and SD logging status on the bottom line. A dash that dies mid-attempt is worse than no dash.</p></div>
+</div>
+<div class="callout">Propulsion current and energy are not shown. The brief forbids a motor controller connection. A clamp-on Hall current sensor around a propulsion cable would be non-contact, but whether that counts as a connection is a rules question rather than an assumption to make.</div>
+</section>
+
+<section id="measurement">
+<h2><small>03</small>How each measurement is obtained</h2>
+<h3>Speed and distance</h3>
+<p>Four neodymium magnets on the front hub in opposing pairs (so the wheel stays balanced), and a DRV5023 digital Hall sensor on the upright (it runs from 2.5 V; the common A3144 needs 4.5 V and would not work on a 3.3 V rail) with a 1 to 2 mm gap. The microcontroller timestamps each pulse in an interrupt and measures the period between pulses rather than counting pulses per second, which gives fine resolution at 15 km/h. Speed is circumference divided by four times the period; distance is the pulse count times a quarter circumference. The loaded rolling circumference is calibrated by pushing the car with the driver aboard over a measured 10 m. A 2 s timeout shows zero. A hardware RC filter and a Schmitt-trigger input, plus a 15 ms minimum period in software, reject bounce and motor EMI.</p>
+<h3>Position and laps</h3>
+<p>A u-blox M10 receiver at 10 Hz. Laps are detected by a geofence around the start/finish line, with a tiller button as manual backup and a 60 s minimum lap time to block double triggers. GPS speed is logged alongside wheel speed so circumference drift can be checked after each session.</p>
+<h3>Time and battery</h3>
+<p>Elapsed time comes from the MCU timer, started by the first start-line crossing or the lap button. Battery voltage comes from a 100k/100k divider into ADC1 at 11 dB attenuation: 4.2 V reads 2.1 V and 3.0 V reads 1.5 V, both inside the calibrated 0 to 3.1 V range. A 100 nF capacitor gives the ADC a low source impedance.</p>
+</section>
+
+<section id="components">
+<h2><small>04</small>Main components</h2>
+<div class="scroll"><table class="bom">
+<tr><th>Part</th><th>Choice</th><th>Why</th></tr>
+<tr><td>Microcontroller</td><td>ESP32-S3-DevKitC-1</td><td>Enough free GPIO to avoid strapping, USB and PSRAM pins (a XIAO-size board runs out). Hardware timers, SPI and UART, Arduino toolchain. Wi-Fi stays off during attempts and is used only to pull logs in the pits.</td></tr>
+<tr><td>Display</td><td>Sharp LS027B7DH01, 2.7 in, 400x240, on Adafruit 4694</td><td>Reflective, so fully readable in direct sun, and draws about 1 mA. The bare panel needs 5 V; the breakout carries its own boost and level shifting, so it runs from the 3.3 V rail.</td></tr>
+<tr><td>Speed sensor</td><td>DRV5023 digital Hall, 4 hub magnets</td><td>Contactless, sealed, no moving parts, cheap to replace. 2.5 to 38 V supply and open-drain output, so it works on 3.3 V.</td></tr>
+<tr><td>GPS</td><td>u-blox MAX-M10S module, active patch antenna</td><td>10 Hz fix rate, low current, antenna can sit on the roof.</td></tr>
+<tr><td>Pace cue</td><td>Red and green 5 mm LEDs</td><td>Three states from two pins. Peripheral-vision cue.</td></tr>
+<tr><td>Controls</td><td>Three sealed IP67 tactile switches</td><td>Lap mark, page, reset. Reachable in the harness.</td></tr>
+<tr><td>Logging</td><td>microSD, SPI mode</td><td>10 Hz CSV, all channels, for strategy analysis.</td></tr>
+<tr><td>Power</td><td>Protected 18650, TPS63021 (fixed 3.3 V) buck-boost, 500 mA PTC, P-FET reverse-polarity guard</td><td>See Battery. The P-FET means a cell inserted backwards does nothing instead of destroying the board.</td></tr>
+<tr><td>Connectors</td><td>JST-XH or M8 locking</td><td>Vibration-safe, keyed, strain-relieved.</td></tr>
+</table></div>
+</section>
+
+<section id="battery">
+<h2><small>05</small>Battery selection</h2>
+<div class="scroll"><table class="budget">
+<tr><th>Load</th><th class="num">Current at 3.3 V</th><th></th><th>Note</th></tr>
+<tr><td>ESP32-S3</td><td class="num">30 mA</td><td class="bar"><i style="--w:35%"></i></td><td>80 MHz, radio off</td></tr>
+<tr><td>GPS module</td><td class="num">25 mA</td><td class="bar"><i style="--w:29%"></i></td><td>Tracking</td></tr>
+<tr><td>Pace LED</td><td class="num">10 mA</td><td class="bar"><i style="--w:12.5%"></i></td><td>One or two lit</td></tr>
+<tr><td>Hall sensor</td><td class="num">5 mA</td><td class="bar"><i style="--w:6%"></i></td><td></td></tr>
+<tr><td>microSD</td><td class="num">5 mA</td><td class="bar"><i style="--w:6%"></i></td><td>Average of write bursts</td></tr>
+<tr><td>Memory LCD</td><td class="num">~1 mA</td><td class="bar"><i style="--w:1.5%"></i></td><td>Including breakout boost</td></tr>
+<tr><td>Regulator loss</td><td class="num">~10 %</td><td class="bar"><i style="--w:9%"></i></td><td>Buck-boost efficiency</td></tr>
+<tr class="total"><td>Total</td><td class="num">~85 mA</td><td class="bar"><i style="--w:100%"></i></td><td>About 0.31 W from the cell, ~87 mA at 3.6 V</td></tr>
+</table></div>
+<div class="kv">
+<div><div class="k">Cell</div><div class="v">1S 18650</div></div>
+<div><div class="k">Nominal</div><div class="v">3.6<span class="u">V</span></div></div>
+<div><div class="k">Capacity</div><div class="v">3000<span class="u">mAh</span></div></div>
+<div><div class="k">Usable</div><div class="v">2.6<span class="u">Ah</span></div></div>
+<div><div class="k">Runtime</div><div class="v">~30<span class="u">h</span></div></div>
+</div>
+<p>One protected 3.6 V 18650 Li-ion cell (over-discharge cut at 2.8 V, over-current and short protection on the cell's own board). After protection and temperature derating about 2.6 Ah is usable, which gives roughly 30 h of continuous running (2.6 Ah / 87 mA): more than five times a long race day, with margin for cold mornings and cell ageing. A single cell keeps the pack at around 50 g and 10.8 Wh, cheap, and charged outside the car in a standard charger, with a spare cell rotated in. Even at 0 °C and 80 % ageing it still runs for over 20 h.</p>
+<p>A buck-boost regulator is used rather than an LDO because the cell runs from 4.2 V down to 3.0 V across a 3.3 V rail. If the rules push toward a safer chemistry the same design accepts a 2S LiFePO4 pack at 6.4 V with no change beyond the regulator's input range. Four AA alkalines would also last a weekend but need replacing and sag in the cold.</p>
+</section>
+
+<section id="install">
+<h2><small>06</small>Installation and operating conditions</h2>
+<p>The dash unit sits in an IP54 ABS box on the steering tiller or bulkhead, in the driver's lower eyeline, foam-mounted to damp vibration. Prototype cars have little suspension and a hot cabin, so the design assumes 0 to 55 °C, sustained vibration and occasional moisture.</p>
+<p>All external wiring is twisted pair, routed on the opposite side of the chassis from the motor and controller cables, and strain-relieved at both ends. The Hall sensor is potted in epoxy on a small bracket and its cable shield is bonded to ground at the dash end only. Magnets are glued and mechanically retained. The GPS antenna goes on top of the body, because a carbon shell blocks the signal. The battery is accessible without tools and fused at the pack. Mass budget is about 150 g excluding cables.</p>
+</section>
+
+<section id="testing">
+<h2><small>07</small>Reliability testing</h2>
+<div class="scroll"><table>
+<tr><th>Test</th><th>Method</th><th>Pass criterion</th></tr>
+<tr><td>Speed accuracy</td><td>Signal generator into the Hall input (17.36 Hz is 25 km/h with four magnets on a 1.6 m wheel), 0 to 60 km/h. Then a bicycle ride against GPS over 5 km.</td><td>Within 0.1 km/h on the bench, distance within 1 % on the road</td></tr>
+<tr><td>Thermal</td><td>2 h in a heated box at 55 °C, 2 h in a fridge at 0 °C, logging throughout.</td><td>No resets, display legible, no log gaps</td></tr>
+<tr><td>Vibration</td><td>1 h strapped to the car on rough tarmac, or to a drill-driven shaker.</td><td>No connector or SD dropouts in the log</td></tr>
+<tr><td>EMI</td><td>Run beside the motor and controller under load with the wheel stationary.</td><td>Zero spurious wheel pulses</td></tr>
+<tr><td>Endurance</td><td>Full discharge from a fresh charge, logging battery voltage.</td><td>At least 24 h, clean shutdown at the cell's cut-off</td></tr>
+<tr><td>Software faults</td><td>Brownout, SD pulled mid-write, GPS antenna unplugged, replayed NMEA with mock start-line crossings.</td><td>Recovers without a reset; laps still counted from the button</td></tr>
+</table></div>
+</section>
+
+<section id="integration">
+<h2><small>08</small>Information needed for integration</h2>
+<p>Rules on auxiliary batteries: permitted chemistries, energy cap, fusing and isolation, and whether non-contact current sensing counts as a motor controller connection. Whether wireless telemetry to the pits is allowed during attempts.</p>
+<p>From the car: loaded tyre circumference, hub geometry and space for a sensor bracket, body material for antenna placement, the driver's seating position and sightline, available dash area, and whether the driver can reach buttons in the harness. From the event: lap length, lap count, time limit and the start-line coordinates.</p>
+</section>
+
+<section id="schematics">
+<h2><small>09</small>Circuit schematics</h2>
+<p>Sheet 1 covers power and the sensor front-ends. A P-FET guards against a reversed cell, the battery divider is taken after the power switch so it draws nothing when off, and a fixed-output TPS63021 holds 3.3 V across the cell's whole 4.2 to 3.0 V range. The Hall output has a 10k pull-up, a 1k/10 nF RC with a 10 µs time constant, and a BAT54S clamp to both rails before the GPIO.</p>
+<figure><div class="plate"><svg viewBox="0 0 1000 550" class="sch" role="img" aria-label="Sheet 1 schematic: 18650 cell, PTC fuse, power switch, reverse-polarity P-FET, 100k/100k battery divider to GPIO1, TPS63021 buck-boost to a 3.3 V rail, DRV5023 Hall sensor with 10k pull-up, 1k/10nF filter and BAT54S clamp to GPIO7, and three tiller switches to GPIO4 to 6."><text x="20" y="28" class="sh" text-anchor="start">Sheet 1 of 2: auxiliary power and sensor front-ends</text><polyline class="wr" points="60,110 60,140"/><line class="pl" x1="44" y1="140" x2="76" y2="140"/><line class="plt" x1="51" y1="148" x2="69" y2="148"/><line class="pl" x1="44" y1="156" x2="76" y2="156"/><line class="plt" x1="51" y1="164" x2="69" y2="164"/><polyline class="wr" points="60,164 60,200"/><g class="gd"><line x1="60" y1="200" x2="60" y2="208"/><line x1="50" y1="208" x2="70" y2="208"/><line x1="54" y1="212" x2="66" y2="212"/><line x1="58" y1="216" x2="62" y2="216"/></g><text x="84" y="146" class="sv" text-anchor="start">BT1</text><text x="84" y="159" class="sv" text-anchor="start">18650 Li-ion, protected</text><text x="84" y="172" class="sv" text-anchor="start">3.0 to 4.2 V, 3000 mAh</text><text x="84" y="185" class="sv" text-anchor="start">tool-free holder</text><polyline class="wr" points="60,110 100,110"/><rect class="cp" x="100" y="103" width="40" height="14"/><line class="pl" x1="100" y1="110" x2="140" y2="110"/><text x="120" y="96" class="sv" text-anchor="middle">F1 PTC 500 mA</text><polyline class="wr" points="140,110 170,110"/><circle class="oc" cx="172" cy="110" r="3"/><circle class="oc" cx="206" cy="110" r="3"/><line class="pl" x1="174" y1="108" x2="204" y2="96"/><text x="189" y="132" class="sv" text-anchor="middle">SW1 power</text><polyline class="wr" points="206,110 250,110"/><line class="pl" x1="250" y1="110" x2="262" y2="110"/><line class="pl" x1="268" y1="110" x2="282" y2="110"/><line class="pl" x1="288" y1="110" x2="300" y2="110"/><line class="pl" x1="250" y1="120" x2="300" y2="120"/><polyline class="wr" points="275,120 275,150"/><g class="gd"><line x1="275" y1="150" x2="275" y2="158"/><line x1="265" y1="158" x2="285" y2="158"/><line x1="269" y1="162" x2="281" y2="162"/><line x1="273" y1="166" x2="277" y2="166"/></g><path class="cpf" d="M281,108 l-8,-5 v10 Z"/><text x="275" y="80" class="sv" text-anchor="middle">Q1 DMG2305UX P-FET</text><text x="275" y="93" class="sv" text-anchor="middle">reverse-polarity guard</text><polyline class="wr" points="300,110 600,110"/><circle class="jn" cx="340" cy="110" r="3"/><polyline class="wr" points="340,110 340,127"/><rect class="cp" x="334" y="127" width="12" height="36"/><polyline class="wr" points="340,163 340,180"/><text x="328" y="143" class="sv" text-anchor="end">R1</text><text x="328" y="156" class="sv" text-anchor="end">100k</text><circle class="jn" cx="340" cy="180" r="3"/><polyline class="wr" points="340,180 340,197"/><rect class="cp" x="334" y="197" width="12" height="36"/><polyline class="wr" points="340,233 340,250"/><text x="328" y="213" class="sv" text-anchor="end">R2</text><text x="328" y="226" class="sv" text-anchor="end">100k</text><g class="gd"><line x1="340" y1="250" x2="340" y2="258"/><line x1="330" y1="258" x2="350" y2="258"/><line x1="334" y1="262" x2="346" y2="262"/><line x1="338" y1="266" x2="342" y2="266"/></g><polyline class="wr" points="340,180 380,180"/><circle class="jn" cx="380" cy="180" r="3"/><polyline class="wr" points="380,180 380,196"/><line class="pl" x1="369" y1="196" x2="391" y2="196"/><line class="pl" x1="369" y1="204" x2="391" y2="204"/><polyline class="wr" points="380,204 380,220"/><text x="395" y="198" class="sv" text-anchor="start">C3</text><text x="395" y="211" class="sv" text-anchor="start">100 nF</text><g class="gd"><line x1="380" y1="220" x2="380" y2="228"/><line x1="370" y1="228" x2="390" y2="228"/><line x1="374" y1="232" x2="386" y2="232"/><line x1="378" y1="236" x2="382" y2="236"/></g><polyline class="wr" points="380,180 420,180"/><path class="nf" d="M420,180 l7,-8 H563.2 v16 H427 Z"/><text x="430" y="184" class="nl" text-anchor="start">VBAT_SENSE to GPIO1</text><text x="432" y="222" class="sv" text-anchor="start">4.2 V reads 2.10 V, 3.0 V reads 1.50 V:</text><text x="432" y="235" class="sv" text-anchor="start">inside the ADC range at 11 dB.</text><text x="432" y="248" class="sv" text-anchor="start">After SW1, so it draws nothing when off.</text><circle class="jn" cx="470" cy="110" r="3"/><polyline class="wr" points="470,110 470,126"/><line class="pl" x1="459" y1="126" x2="481" y2="126"/><line class="pl" x1="459" y1="134" x2="481" y2="134"/><polyline class="wr" points="470,134 470,150"/><text x="485" y="128" class="sv" text-anchor="start">C1</text><text x="485" y="141" class="sv" text-anchor="start">10 µF</text><g class="gd"><line x1="470" y1="150" x2="470" y2="158"/><line x1="460" y1="158" x2="480" y2="158"/><line x1="464" y1="162" x2="476" y2="162"/><line x1="468" y1="166" x2="472" y2="166"/></g><rect class="bx" x="620" y="90" width="150" height="110" rx="2"/><text x="695" y="214" class="sv" text-anchor="middle">U1 TPS63021, fixed 3.3 V</text><text x="695" y="227" class="sv" text-anchor="middle">buck-boost, 1.8 to 5.5 V in</text><polyline class="wr" points="600,110 620,110"/><text x="626" y="114" class="pn" text-anchor="start">VIN</text><polyline class="wr" points="600,110 600,150 620,150"/><circle class="jn" cx="600" cy="110" r="3"/><text x="626" y="154" class="pn" text-anchor="start">EN</text><text x="764" y="114" class="pn" text-anchor="end">VOUT</text><text x="764" y="154" class="pn" text-anchor="end">FB</text><text x="695" y="192" class="pn" text-anchor="middle">GND</text><text x="648" y="104" class="pn" text-anchor="middle">L1</text><text x="742" y="104" class="pn" text-anchor="middle">L2</text><polyline class="wr" points="648,90 648,60 671,60"/><path class="pl" fill="none" d="M671,60 a6,6 0 0 1 12,0 a6,6 0 0 1 12,0 a6,6 0 0 1 12,0 a6,6 0 0 1 12,0"/><polyline class="wr" points="719,60 742,60 742,90"/><text x="695" y="48" class="sv" text-anchor="middle">L1 1.5 µH</text><polyline class="wr" points="770,110 900,110"/><polyline class="wr" points="770,150 790,150 790,110"/><circle class="jn" cx="790" cy="110" r="3"/><circle class="jn" cx="830" cy="110" r="3"/><polyline class="wr" points="830,110 830,126"/><line class="pl" x1="819" y1="126" x2="841" y2="126"/><line class="pl" x1="819" y1="134" x2="841" y2="134"/><polyline class="wr" points="830,134 830,150"/><text x="845" y="128" class="sv" text-anchor="start">C2</text><text x="845" y="141" class="sv" text-anchor="start">2 x 22 µF</text><g class="gd"><line x1="830" y1="150" x2="830" y2="158"/><line x1="820" y1="158" x2="840" y2="158"/><line x1="824" y1="162" x2="836" y2="162"/><line x1="828" y1="166" x2="832" y2="166"/></g><circle class="oc" cx="903" cy="110" r="3.5"/><text x="903" y="98" class="sh2" text-anchor="middle">3V3 rail</text><text x="990" y="170" class="sv" text-anchor="end">to MCU, GPS, LCD,</text><text x="990" y="183" class="sv" text-anchor="end">microSD, Hall sensor:</text><text x="990" y="196" class="sv" text-anchor="end">about 85 mA typical</text><line class="sep" x1="20" y1="290" x2="980" y2="290"/><rect class="zone" x="20" y="310" width="230" height="230" rx="6"/><text x="30" y="328" class="zl" text-anchor="start">ON THE FRONT UPRIGHT</text><rect class="bx" x="60" y="390" width="100" height="90" rx="2"/><text x="110" y="498" class="sv" text-anchor="middle">HALL1 DRV5023</text><text x="110" y="511" class="sv" text-anchor="middle">2.5 to 38 V, open drain</text><text x="66" y="414" class="pn" text-anchor="start">VCC</text><text x="154" y="439" class="pn" text-anchor="end">OUT</text><text x="66" y="464" class="pn" text-anchor="start">GND</text><polyline class="wr" points="60,410 40,410 40,372 250,372"/><circle class="jn" cx="205" cy="372" r="3"/><polyline class="wr" points="205,372 205,388"/><line class="pl" x1="194" y1="388" x2="216" y2="388"/><line class="pl" x1="194" y1="396" x2="216" y2="396"/><polyline class="wr" points="205,396 205,412"/><text x="220" y="390" class="sv" text-anchor="start">C5</text><text x="220" y="403" class="sv" text-anchor="start">100 nF</text><g class="gd"><line x1="205" y1="412" x2="205" y2="420"/><line x1="195" y1="420" x2="215" y2="420"/><line x1="199" y1="424" x2="211" y2="424"/><line x1="203" y1="428" x2="207" y2="428"/></g><polyline class="wr" points="60,460 40,460 40,472"/><g class="gd"><line x1="40" y1="472" x2="40" y2="480"/><line x1="30" y1="480" x2="50" y2="480"/><line x1="34" y1="484" x2="46" y2="484"/><line x1="38" y1="488" x2="42" y2="488"/></g><polyline class="wr" points="160,435 250,435"/><path class="cable" d="M250,372 H330"/><path class="cable" d="M250,435 H330"/><text x="290" y="470" class="sv" text-anchor="middle">3-core</text><text x="290" y="483" class="sv" text-anchor="middle">shielded</text><text x="290" y="496" class="sv" text-anchor="middle">~1.5 m</text><rect class="zone" x="330" y="310" width="440" height="230" rx="6"/><text x="340" y="328" class="zl" text-anchor="start">ON THE DASH PCB</text><polyline class="wr" points="330,372 352,372"/><circle class="oc" cx="355.5" cy="372" r="3.5"/><text x="364" y="376" class="sv" text-anchor="start">3V3</text><polyline class="wr" points="330,435 400,435"/><circle class="jn" cx="400" cy="435" r="3"/><polyline class="wr" points="400,365 400,382"/><rect class="cp" x="394" y="382" width="12" height="36"/><polyline class="wr" points="400,418 400,435"/><text x="412" y="398" class="sv" text-anchor="start">R3</text><text x="412" y="411" class="sv" text-anchor="start">10k</text><circle class="oc" cx="400" cy="365" r="3.5"/><text x="400" y="357" class="sv" text-anchor="middle">3V3</text><polyline class="wr" points="400,435 417,435"/><rect class="cp" x="417" y="429" width="36" height="12"/><polyline class="wr" points="453,435 470,435"/><text x="435" y="424" class="sv" text-anchor="middle">R4 1k</text><polyline class="wr" points="470,435 520,435"/><circle class="jn" cx="520" cy="435" r="3"/><polyline class="wr" points="520,435 520,451"/><line class="pl" x1="509" y1="451" x2="531" y2="451"/><line class="pl" x1="509" y1="459" x2="531" y2="459"/><polyline class="wr" points="520,459 520,475"/><text x="535" y="453" class="sv" text-anchor="start">C4</text><text x="535" y="466" class="sv" text-anchor="start">10 nF</text><g class="gd"><line x1="520" y1="475" x2="520" y2="483"/><line x1="510" y1="483" x2="530" y2="483"/><line x1="514" y1="487" x2="526" y2="487"/><line x1="518" y1="491" x2="522" y2="491"/></g><circle class="jn" cx="590" cy="435" r="3"/><polyline class="wr" points="520,435 590,435"/><polyline class="wr" points="590,375 590,415"/><path class="cpf" d="M582,403 L598,403 L590,387 Z"/><line class="pl" x1="582" y1="387" x2="598" y2="387"/><circle class="oc" cx="590" cy="375" r="3.5"/><text x="590" y="367" class="sv" text-anchor="middle">3V3</text><text x="606" y="399" class="sv" text-anchor="start">D1 BAT54S</text><text x="606" y="412" class="sv" text-anchor="start">clamps to rails</text><polyline class="wr" points="590,415 590,455"/><polyline class="wr" points="590,455 590,495"/><path class="cpf" d="M582,483 L598,483 L590,467 Z"/><line class="pl" x1="582" y1="467" x2="598" y2="467"/><g class="gd"><line x1="590" y1="495" x2="590" y2="503"/><line x1="580" y1="503" x2="600" y2="503"/><line x1="584" y1="507" x2="596" y2="507"/><line x1="588" y1="511" x2="592" y2="511"/></g><polyline class="wr" points="590,435 612,435"/><path class="nf" d="M612,435 l7,-8 H762 v16 H619 Z"/><text x="622" y="439" class="nl" text-anchor="start">WHEEL_PULSE to GPIO7</text><text x="345" y="532" class="sv" text-anchor="start">R4 C4: 10 µs low-pass against ringing and EMI. Shield to GND here only.</text><rect class="zone" x="790" y="310" width="200" height="230" rx="6"/><text x="800" y="328" class="zl" text-anchor="start">TILLER SWITCHES</text><polyline class="wr" points="808,384 808,372 822,372"/><g class="gd"><line x1="808" y1="384" x2="808" y2="392"/><line x1="798" y1="392" x2="818" y2="392"/><line x1="802" y1="396" x2="814" y2="396"/><line x1="806" y1="400" x2="810" y2="400"/></g><circle class="oc" cx="822" cy="372" r="3"/><circle class="oc" cx="856" cy="372" r="3"/><line class="pl" x1="820" y1="362" x2="858" y2="362"/><line class="pl" x1="839" y1="362" x2="839" y2="354"/><text x="839" y="390" class="sv" text-anchor="middle">SW2</text><polyline class="wr" points="856,372 866,372"/><path class="nf" d="M866,372 l7,-8 H961.6 v16 H873 Z"/><text x="876" y="376" class="nl" text-anchor="start">LAP to GPIO4</text><polyline class="wr" points="808,439 808,427 822,427"/><g class="gd"><line x1="808" y1="439" x2="808" y2="447"/><line x1="798" y1="447" x2="818" y2="447"/><line x1="802" y1="451" x2="814" y2="451"/><line x1="806" y1="455" x2="810" y2="455"/></g><circle class="oc" cx="822" cy="427" r="3"/><circle class="oc" cx="856" cy="427" r="3"/><line class="pl" x1="820" y1="417" x2="858" y2="417"/><line class="pl" x1="839" y1="417" x2="839" y2="409"/><text x="839" y="445" class="sv" text-anchor="middle">SW3</text><polyline class="wr" points="856,427 866,427"/><path class="nf" d="M866,427 l7,-8 H968.4 v16 H873 Z"/><text x="876" y="431" class="nl" text-anchor="start">PAGE to GPIO5</text><polyline class="wr" points="808,494 808,482 822,482"/><g class="gd"><line x1="808" y1="494" x2="808" y2="502"/><line x1="798" y1="502" x2="818" y2="502"/><line x1="802" y1="506" x2="814" y2="506"/><line x1="806" y1="510" x2="810" y2="510"/></g><circle class="oc" cx="822" cy="482" r="3"/><circle class="oc" cx="856" cy="482" r="3"/><line class="pl" x1="820" y1="472" x2="858" y2="472"/><line class="pl" x1="839" y1="472" x2="839" y2="464"/><text x="839" y="500" class="sv" text-anchor="middle">SW4</text><polyline class="wr" points="856,482 866,482"/><path class="nf" d="M866,482 l7,-8 H975.2 v16 H873 Z"/><text x="876" y="486" class="nl" text-anchor="start">RESET to GPIO6</text><text x="800" y="525" class="sv" text-anchor="start">Pull-ups in MCU, 100 nF each</text></svg></div><figcaption><span class="no">Sheet 1 of 2</span><span class="ti">Auxiliary power and sensor front-ends</span><span class="me">S. Oruganti</span><span class="me">Oct 2026</span></figcaption></figure>
+<p>Sheet 2 is the microcontroller and its peripherals. The LCD and SD card share one hardware SPI bus with separate chip selects. Pins avoid the S3's strapping pins (0, 3, 45, 46), native USB (19, 20) and the PSRAM pins. The memory LCD needs its VCOM polarity flipped about once a second to avoid DC across the panel; with EMD tied low this happens in the SPI command byte on every refresh, and a loop watchdog reboots the MCU if the firmware ever stalls.</p>
+<figure><div class="plate"><svg viewBox="0 0 1000 610" class="sch" role="img" aria-label="Sheet 2 schematic: ESP32-S3 DevKitC-1 with sheet 1 inputs on GPIO1 and 4 to 7, u-blox MAX-M10S GPS on UART1 (GPIO17 and 18), spare I2C header on GPIO8 and 9, Sharp memory LCD breakout and microSD socket sharing SPI on GPIO11 to 13 with chip selects on GPIO10 and 14, LCD DISP on GPIO16, and green and red pace LEDs on GPIO39 and 40 through 330 ohm resistors."><text x="20" y="28" class="sh" text-anchor="start">Sheet 2 of 2: microcontroller and peripherals</text><rect class="bx" x="360" y="100" width="260" height="480" rx="2"/><text x="490" y="446" class="sh2" text-anchor="middle">U2 ESP32-S3</text><text x="490" y="461" class="sv" text-anchor="middle">DevKitC-1, fed at its 3V3 pin</text><text x="490" y="570" class="pn" text-anchor="middle">GND</text><polyline class="wr" points="490,580 490,592"/><g class="gd"><line x1="490" y1="592" x2="490" y2="600"/><line x1="480" y1="600" x2="500" y2="600"/><line x1="484" y1="604" x2="496" y2="604"/><line x1="488" y1="608" x2="492" y2="608"/></g><text x="490" y="118" class="pn" text-anchor="middle">3V3</text><polyline class="wr" points="490,100 490,70"/><circle class="oc" cx="490" cy="70" r="3.5"/><text x="490" y="62" class="sv" text-anchor="middle">3V3</text><text x="368" y="144" class="pn" text-anchor="start">GPIO1 VBAT</text><polyline class="wr" points="360,140 330,140"/><path class="nf" d="M330,140 l-7,-8 H180 v16 H323 Z"/><text x="320" y="144" class="nl" text-anchor="end">VBAT_SENSE (sheet 1)</text><text x="368" y="184" class="pn" text-anchor="start">GPIO7 PULSE</text><polyline class="wr" points="360,180 330,180"/><path class="nf" d="M330,180 l-7,-8 H173.20000000000002 v16 H323 Z"/><text x="320" y="184" class="nl" text-anchor="end">WHEEL_PULSE (sheet 1)</text><text x="368" y="224" class="pn" text-anchor="start">GPIO4 LAP</text><polyline class="wr" points="360,220 330,220"/><path class="nf" d="M330,220 l-7,-8 H227.60000000000002 v16 H323 Z"/><text x="320" y="224" class="nl" text-anchor="end">LAP (sheet 1)</text><text x="368" y="264" class="pn" text-anchor="start">GPIO5 PAGE</text><polyline class="wr" points="360,260 330,260"/><path class="nf" d="M330,260 l-7,-8 H220.8 v16 H323 Z"/><text x="320" y="264" class="nl" text-anchor="end">PAGE (sheet 1)</text><text x="368" y="304" class="pn" text-anchor="start">GPIO6 RESET</text><polyline class="wr" points="360,300 330,300"/><path class="nf" d="M330,300 l-7,-8 H214 v16 H323 Z"/><text x="320" y="304" class="nl" text-anchor="end">RESET (sheet 1)</text><text x="368" y="374" class="pn" text-anchor="start">GPIO17 RXD1</text><text x="368" y="414" class="pn" text-anchor="start">GPIO18 TXD1</text><text x="368" y="484" class="pn" text-anchor="start">GPIO8 SDA</text><text x="368" y="524" class="pn" text-anchor="start">GPIO9 SCL</text><rect class="bx" x="80" y="345" width="170" height="95" rx="2"/><text x="88" y="374" class="pn" text-anchor="start">VCC</text><text x="88" y="414" class="pn" text-anchor="start">GND</text><text x="242" y="374" class="pn" text-anchor="end">TX</text><text x="242" y="414" class="pn" text-anchor="end">RX</text><text x="165" y="362" class="sh2" text-anchor="middle">U3 MAX-M10S</text><text x="165" y="394" class="sv" text-anchor="middle">10 Hz, UART</text><text x="165" y="432" class="sv" text-anchor="middle">patch antenna on roof</text><polyline class="wr" points="250,370 360,370"/><polyline class="wr" points="250,410 360,410"/><text x="305" y="362" class="sv" text-anchor="middle">NMEA/UBX 115200</text><polyline class="wr" points="80,370 55,370 55,335"/><circle class="oc" cx="55" cy="335" r="3.5"/><text x="55" y="327" class="sv" text-anchor="middle">3V3</text><polyline class="wr" points="80,410 55,410 55,420"/><g class="gd"><line x1="55" y1="420" x2="55" y2="428"/><line x1="45" y1="428" x2="65" y2="428"/><line x1="49" y1="432" x2="61" y2="432"/><line x1="53" y1="436" x2="57" y2="436"/></g><rect class="bx" x="150" y="460" width="100" height="80" rx="2"/><text x="156" y="484" class="pn" text-anchor="start">SDA</text><text x="156" y="524" class="pn" text-anchor="start">SCL</text><text x="200" y="558" class="sv" text-anchor="middle">J3 spare I2C header</text><text x="200" y="571" class="sv" text-anchor="middle">(IMU, phase 2)</text><polyline class="wr" points="250,480 360,480"/><polyline class="wr" points="250,520 360,520"/><text x="612" y="144" class="pn" text-anchor="end">LCD_CS GPIO10</text><text x="612" y="184" class="pn" text-anchor="end">DISP GPIO16</text><text x="612" y="224" class="pn" text-anchor="end">SCK GPIO12</text><text x="612" y="264" class="pn" text-anchor="end">MOSI GPIO11</text><text x="612" y="304" class="pn" text-anchor="end">MISO GPIO13</text><text x="612" y="344" class="pn" text-anchor="end">SD_CS GPIO14</text><text x="612" y="484" class="pn" text-anchor="end">LED_G GPIO39</text><text x="612" y="534" class="pn" text-anchor="end">LED_R GPIO40</text><rect class="bx" x="790" y="40" width="190" height="135" rx="2"/><text x="798" y="64" class="pn" text-anchor="start">CS</text><text x="798" y="89" class="pn" text-anchor="start">DISP</text><text x="798" y="114" class="pn" text-anchor="start">CLK</text><text x="798" y="139" class="pn" text-anchor="start">DI</text><text x="972" y="60" class="sh2" text-anchor="end">DS1 2.7 in Sharp</text><text x="972" y="75" class="sv" text-anchor="end">memory LCD on</text><text x="972" y="88" class="sv" text-anchor="end">Adafruit 4694:</text><text x="972" y="101" class="sv" text-anchor="end">own 5 V boost and</text><text x="972" y="114" class="sv" text-anchor="end">level shifting</text><text x="820" y="166" class="pn" text-anchor="middle">VIN</text><text x="870" y="166" class="pn" text-anchor="middle">GND</text><text x="920" y="166" class="pn" text-anchor="middle">EMD</text><polyline class="wr" points="820,175 820,192"/><circle class="oc" cx="820" cy="195.5" r="3.5"/><text x="820" y="214" class="sv" text-anchor="middle">3V3</text><polyline class="wr" points="870,175 870,186"/><g class="gd"><line x1="870" y1="186" x2="870" y2="194"/><line x1="860" y1="194" x2="880" y2="194"/><line x1="864" y1="198" x2="876" y2="198"/><line x1="868" y1="202" x2="872" y2="202"/></g><polyline class="wr" points="920,175 920,186"/><g class="gd"><line x1="920" y1="186" x2="920" y2="194"/><line x1="910" y1="194" x2="930" y2="194"/><line x1="914" y1="198" x2="926" y2="198"/><line x1="918" y1="202" x2="922" y2="202"/></g><text x="980" y="232" class="sv" text-anchor="end">EMD low: VCOM toggled in the SPI</text><text x="980" y="245" class="sv" text-anchor="end">command on every 4 Hz refresh</text><rect class="bx" x="790" y="280" width="190" height="115" rx="2"/><text x="798" y="304" class="pn" text-anchor="start">CS</text><text x="798" y="329" class="pn" text-anchor="start">DO</text><text x="798" y="354" class="pn" text-anchor="start">DI</text><text x="798" y="379" class="pn" text-anchor="start">CLK</text><text x="972" y="300" class="sh2" text-anchor="end">J1 microSD</text><text x="972" y="315" class="sv" text-anchor="end">SPI mode</text><text x="972" y="328" class="sv" text-anchor="end">47k pull-up on CS</text><text x="972" y="341" class="sv" text-anchor="end">10 µF local</text><text x="870" y="388" class="pn" text-anchor="middle">3V3</text><text x="930" y="388" class="pn" text-anchor="middle">GND</text><polyline class="wr" points="870,395 870,412"/><circle class="oc" cx="870" cy="415.5" r="3.5"/><text x="870" y="434" class="sv" text-anchor="middle">3V3</text><polyline class="wr" points="930,395 930,406"/><g class="gd"><line x1="930" y1="406" x2="930" y2="414"/><line x1="920" y1="414" x2="940" y2="414"/><line x1="924" y1="418" x2="936" y2="418"/><line x1="928" y1="422" x2="932" y2="422"/></g><polyline class="wr" points="620,140 650,140"/><polyline class="wr" points="650,140 650,60"/><polyline class="wr" points="650,60 790,60"/><polyline class="wr" points="620,180 670,180"/><polyline class="wr" points="670,180 670,85"/><polyline class="wr" points="670,85 790,85"/><polyline class="wr" points="620,220 690,220"/><polyline class="wr" points="690,110 690,375"/><circle class="jn" cx="690" cy="220" r="3"/><polyline class="wr" points="690,110 790,110"/><polyline class="wr" points="690,375 790,375"/><polyline class="wr" points="620,260 710,260"/><polyline class="wr" points="710,135 710,350"/><circle class="jn" cx="710" cy="260" r="3"/><polyline class="wr" points="710,135 790,135"/><polyline class="wr" points="710,350 790,350"/><polyline class="wr" points="620,300 730,300"/><polyline class="wr" points="730,300 730,325"/><polyline class="wr" points="730,325 790,325"/><polyline class="wr" points="620,340 750,340"/><polyline class="wr" points="750,340 750,300"/><polyline class="wr" points="750,300 790,300"/><text x="705" y="425" class="zl" text-anchor="middle">shared SPI bus</text><polyline class="wr" points="620,480 640,480"/><polyline class="wr" points="640,480 657,480"/><rect class="cp" x="657" y="474" width="36" height="12"/><polyline class="wr" points="693,480 710,480"/><text x="675" y="469" class="sv" text-anchor="middle">R6 330 Ω</text><polyline class="wr" points="710,480 724,480"/><path class="cpf" d="M724,472 L724,488 L738,480 Z"/><line class="pl" x1="738" y1="472" x2="738" y2="488"/><polyline class="wr" points="738,480 752,480"/><path class="wr" d="M726,468 l7,-9 m-4,0 h4 v4 M734,468 l7,-9 m-4,0 h4 v4"/><polyline class="wr" points="752,480 770,480 770,488"/><g class="gd"><line x1="770" y1="488" x2="770" y2="496"/><line x1="760" y1="496" x2="780" y2="496"/><line x1="764" y1="500" x2="776" y2="500"/><line x1="768" y1="504" x2="772" y2="504"/></g><text x="800" y="484" class="sv" text-anchor="start">D3 green: coast</text><polyline class="wr" points="620,530 640,530"/><polyline class="wr" points="640,530 657,530"/><rect class="cp" x="657" y="524" width="36" height="12"/><polyline class="wr" points="693,530 710,530"/><text x="675" y="519" class="sv" text-anchor="middle">R5 330 Ω</text><polyline class="wr" points="710,530 724,530"/><path class="cpf" d="M724,522 L724,538 L738,530 Z"/><line class="pl" x1="738" y1="522" x2="738" y2="538"/><polyline class="wr" points="738,530 752,530"/><path class="wr" d="M726,518 l7,-9 m-4,0 h4 v4 M734,518 l7,-9 m-4,0 h4 v4"/><polyline class="wr" points="752,530 770,530 770,538"/><g class="gd"><line x1="770" y1="538" x2="770" y2="546"/><line x1="760" y1="546" x2="780" y2="546"/><line x1="764" y1="550" x2="776" y2="550"/><line x1="768" y1="554" x2="772" y2="554"/></g><text x="800" y="534" class="sv" text-anchor="start">D2 red: burn</text><text x="800" y="554" class="sv" text-anchor="start">both lit: hold. ~4 mA each</text></svg></div><figcaption><span class="no">Sheet 2 of 2</span><span class="ti">Microcontroller, display, logger, GPS and pace LEDs</span><span class="me">S. Oruganti</span><span class="me">Oct 2026</span></figcaption></figure>
+</section>
+
+<section id="firmware">
+<h2><small>10</small>Firmware</h2>
+<p>Arduino sketch for the ESP32-S3 (also in the <a href="firmware/dis_firmware/dis_firmware.ino">repository</a>). Speed comes from an interrupt that records the pulse period; lap detection is a GPS geofence with a button backup; the pace cue compares the projected finish time with the time limit; the strategy cue reads the lap distance against the plan in <code class="i">config.h</code>; everything is logged to CSV at 10 Hz. All race and vehicle assumptions live in <code class="i">config.h</code>. Libraries: Adafruit_SharpMem, Adafruit_GFX, TinyGPSPlus, SD.</p>
+<details open><summary>config.h <code>race and vehicle parameters</code></summary><pre>// Race and vehicle parameters. Everything here is an assumption until the team
+// confirms it; see &quot;Information needed for integration&quot; in the proposal.
+#pragma once
+#include &lt;stdint.h&gt;
+
+// Wheel: loaded rolling circumference with the driver aboard, measured by
+// pushing the car over 10 m and counting pulses.
+constexpr float WHEEL_CIRC_M     = 1.60f;   // ~20 inch wheel, to be measured
+constexpr float MAGNETS_PER_REV  = 4.0f;
+
+// Track (placeholder values, set per event)
+constexpr double START_LAT       = 51.5000;
+constexpr double START_LON       = -0.1200;
+constexpr float  START_RADIUS_M  = 12.0f;   // geofence radius for lap detection
+constexpr float  LAP_M           = 1500.0f;
+constexpr uint8_t TOTAL_LAPS     = 10;
+constexpr uint32_t TIME_LIMIT_S  = 36 * 60; // attempt time limit
+constexpr float  MIN_AVG_KMH     = (TOTAL_LAPS * LAP_M / 1000.0f) / (TIME_LIMIT_S / 3600.0f);
+constexpr uint32_t TARGET_LAP_MS = (uint32_t)(TIME_LIMIT_S * 1000.0f / TOTAL_LAPS * 0.97f); // 3 % safety
+constexpr uint32_t MIN_LAP_MS    = 60 * 1000;  // ignore lap triggers closer than this
+
+// Pace cue thresholds, in seconds of slack on the projected finish time
+constexpr float PACE_HIGH_S = 60.0f;   // more slack than this: coast
+constexpr float PACE_LOW_S  = 20.0f;   // less slack than this: burn
+constexpr float PACE_HYST_S = 10.0f;
+
+// Strategy plan: where on the lap each burn or coast starts, in metres from
+// the start line. Flat-track placeholder from the simulator; the real plan
+// comes from practice-run logs on the actual circuit (hills move the burns).
+struct PlanStep { float fromM; bool burn; };
+constexpr PlanStep PLAN[] = {
+  {   0.0f, true  },   // burn out of the start line
+  { 100.0f, false },   // long glide
+  { 750.0f, true  },   // second burn
+  { 850.0f, false },   // glide to the line
+};
+constexpr int PLAN_STEPS = sizeof(PLAN) / sizeof(PLAN[0]);
+</pre></details>
+<details><summary>dis_firmware.ino <code>main sketch</code></summary><pre>/*
+  Driver information system, Imperial Eco-Marathon prototype
+  Target: ESP32-S3-DevKitC-1 (Arduino-ESP32 core 3.x)
+
+  Inputs : Hall wheel sensor (GPIO7), GPS on UART1 (GPIO17 RX, GPIO18 TX),
+           buttons (GPIO4/5/6), battery divider on GPIO1 (ADC1)
+  Outputs: Sharp memory LCD and microSD on one hardware SPI bus,
+           red/green pace LEDs (GPIO40/39), CSV log on microSD
+
+  Libraries (Library Manager): Adafruit_SharpMem, Adafruit_GFX, TinyGPSPlus, SD
+  Set WHEEL_CIRC_M, the track and the strategy plan in config.h before flashing.
+*/
+
+#include &lt;Arduino.h&gt;
+#include &lt;SPI.h&gt;
+#include &lt;SD.h&gt;
+#include &lt;Adafruit_GFX.h&gt;
+#include &lt;Adafruit_SharpMem.h&gt;
+#include &lt;TinyGPSPlus.h&gt;
+#include &quot;config.h&quot;
+
+// ---------------------------------------------------------------- pins
+// Chosen to avoid strapping pins (0, 3, 45, 46), native USB (19, 20),
+// UART0 (43, 44) and the octal PSRAM pins (35 to 37).
+constexpr int PIN_VBAT      = 1;   // ADC1_CH0, 100k/100k divider
+constexpr int PIN_BTN_LAP   = 4;
+constexpr int PIN_BTN_PAGE  = 5;
+constexpr int PIN_BTN_RESET = 6;
+constexpr int PIN_PULSE     = 7;   // Hall sensor, falling edge
+constexpr int PIN_LCD_CS    = 10;  // Sharp CS is active high; the library handles it
+constexpr int PIN_MOSI      = 11;
+constexpr int PIN_SCK       = 12;
+constexpr int PIN_MISO      = 13;
+constexpr int PIN_SD_CS     = 14;
+constexpr int PIN_LCD_DISP  = 16;  // high = display on
+constexpr int PIN_GPS_RX    = 17;  // from GPS TX
+constexpr int PIN_GPS_TX    = 18;  // to GPS RX
+constexpr int PIN_LED_G     = 39;
+constexpr int PIN_LED_R     = 40;
+
+// ---------------------------------------------------------------- speed from Hall pulses
+// The ISR records the time between successive pulses. Period measurement, not
+// pulse counting, so resolution is good at low speed. Pulses closer than
+// MIN_PERIOD_US are treated as bounce or EMI (that is ~96 km/h here).
+volatile uint32_t g_lastPulseUs  = 0;
+volatile uint32_t g_periodUs     = 0;
+volatile uint32_t g_pulseCount   = 0;
+constexpr uint32_t MIN_PERIOD_US = 15000;
+
+void IRAM_ATTR onWheelPulse() {
+  uint32_t now = micros();
+  uint32_t dt  = now - g_lastPulseUs;
+  if (dt &lt; MIN_PERIOD_US) return;
+  g_lastPulseUs = now;
+  g_periodUs    = dt;
+  g_pulseCount++;
+}
+
+float wheelSpeedKmh() {
+  uint32_t period, last;
+  noInterrupts();
+  period = g_periodUs;
+  last   = g_lastPulseUs;
+  interrupts();
+  // No pulse for 2 s means stopped
+  if (period == 0 || (micros() - last) &gt; 2000000UL) return 0.0f;
+  float metresPerPulse = WHEEL_CIRC_M / MAGNETS_PER_REV;
+  return metresPerPulse / (period * 1e-6f) * 3.6f;
+}
+
+float distanceM() {
+  uint32_t n;
+  noInterrupts();
+  n = g_pulseCount;
+  interrupts();
+  return n * (WHEEL_CIRC_M / MAGNETS_PER_REV);
+}
+
+// ---------------------------------------------------------------- peripherals
+// Hardware SPI for both devices. A bit-banged LCD on the same pins would steal
+// them from the SPI peripheral and break the SD card.
+Adafruit_SharpMem lcd(&amp;SPI, PIN_LCD_CS, 400, 240, 2000000);
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(1);
+File logFile;
+bool sdOk = false;
+
+// ---------------------------------------------------------------- race state
+struct RaceState {
+  bool     running   = false;
+  bool     finished  = false;
+  uint32_t startMs   = 0;
+  uint32_t finishMs  = 0;
+  uint32_t lapStartMs = 0;
+  uint8_t  lap       = 0;      // completed laps
+  float    lapDistStartM = 0;
+  float    distStartM = 0;
+  uint32_t lastLapMs = 0;
+  bool     insideStartZone = false;
+} race;
+
+uint8_t page = 0;   // 0 = race, 1 = diagnostics
+
+// Exponentially smoothed speed for the display, raw speed for logging
+float speedKmh = 0, speedSmooth = 0;
+
+float batteryVolts() {
+  // 11 dB attenuation: about 0 to 3.1 V, calibrated by analogReadMilliVolts.
+  // 100k/100k divider, so 4.2 V reads 2.1 V.
+  uint32_t mv = 0;
+  for (int i = 0; i &lt; 8; i++) mv += analogReadMilliVolts(PIN_VBAT);
+  return (mv / 8) / 1000.0f * 2.0f;
+}
+
+// ---------------------------------------------------------------- buttons with debounce
+struct Button {
+  int pin; bool state = true; bool last = true; uint32_t tChange = 0; bool pressed = false;
+  void update() {
+    bool r = digitalRead(pin);
+    if (r != last) { tChange = millis(); last = r; }
+    if ((millis() - tChange) &gt; 30 &amp;&amp; r != state) { state = r; if (!state) pressed = true; }
+  }
+  bool take() { bool p = pressed; pressed = false; return p; }
+};
+Button btnLap{PIN_BTN_LAP}, btnPage{PIN_BTN_PAGE}, btnReset{PIN_BTN_RESET};
+
+// ---------------------------------------------------------------- lap and pacing logic
+void startRace() {
+  race = RaceState();
+  race.running = true;
+  race.startMs = millis();
+  race.lapStartMs = race.startMs;
+  race.lapDistStartM = distanceM();
+  race.distStartM = race.lapDistStartM;
+  race.insideStartZone = true;
+}
+
+void markLap() {
+  uint32_t now = millis();
+  if (race.finished) return;
+  if (!race.running) { startRace(); return; }
+  if (now - race.lapStartMs &lt; MIN_LAP_MS) return;    // reject double trigger
+  race.lastLapMs = now - race.lapStartMs;
+  race.lapStartMs = now;
+  race.lap++;
+  race.lapDistStartM = distanceM();
+  if (race.lap &gt;= TOTAL_LAPS) { race.finished = true; race.running = false; race.finishMs = now; }
+}
+
+// Geofence on the start/finish line: fire once when entering the zone
+void checkGpsLap() {
+  if (!gps.location.isValid() || gps.location.age() &gt; 1500) return;
+  double dist = TinyGPSPlus::distanceBetween(gps.location.lat(), gps.location.lng(),
+                                             START_LAT, START_LON);
+  bool inside = dist &lt; START_RADIUS_M;
+  if (inside &amp;&amp; !race.insideStartZone) markLap();
+  race.insideStartZone = inside;
+}
+
+float lapDistM() { return distanceM() - race.lapDistStartM; }
+
+// Strategy cue: current plan action and metres until the next change
+struct Cue { bool burn; float toNextM; };
+Cue planCue() {
+  float d = fmodf(lapDistM(), LAP_M);
+  int i = 0;
+  while (i + 1 &lt; PLAN_STEPS &amp;&amp; d &gt;= PLAN[i + 1].fromM) i++;
+  float next = (i + 1 &lt; PLAN_STEPS) ? PLAN[i + 1].fromM : LAP_M;
+  return { PLAN[i].burn, next - d };
+}
+
+// Pace cue. Compare the projected finish time at the current average speed
+// with the time limit. Hysteresis stops the LED flickering between states.
+enum Pace { COAST, HOLD, BURN };
+Pace pace = HOLD;
+
+Pace computePace(float avgKmh) {
+  if (!race.running || avgKmh &lt; 1.0f) return HOLD;
+  float remainingKm = TOTAL_LAPS * LAP_M / 1000.0f - (distanceM() - race.distStartM) / 1000.0f;
+  float elapsedS = (millis() - race.startMs) / 1000.0f;
+  float projectedS = elapsedS + (remainingKm / avgKmh) * 3600.0f;
+  float margin = TIME_LIMIT_S - projectedS;        // seconds of slack
+  switch (pace) {
+    case COAST: return (margin &lt; PACE_LOW_S)  ? HOLD : COAST;
+    case BURN:  return (margin &gt; PACE_HIGH_S) ? HOLD : BURN;
+    default:
+      if (margin &gt; PACE_HIGH_S + PACE_HYST_S) return COAST;
+      if (margin &lt; PACE_LOW_S  - PACE_HYST_S) return BURN;
+      return HOLD;
+  }
+}
+
+void setPaceLed(Pace p) {
+  digitalWrite(PIN_LED_G, p != BURN);
+  digitalWrite(PIN_LED_R, p != COAST);
+}
+
+// ---------------------------------------------------------------- display
+void fmtTime(char* buf, size_t n, uint32_t ms) {
+  uint32_t s = ms / 1000;
+  snprintf(buf, n, &quot;%02lu:%02lu&quot;, (unsigned long)(s / 60), (unsigned long)(s % 60));
+}
+
+void drawRacePage(float avgKmh, uint32_t elapsedMs) {
+  char buf[32];
+  lcd.clearDisplay();
+  lcd.setTextColor(BLACK);
+
+  // Top line: lap and elapsed
+  lcd.setTextSize(3);
+  snprintf(buf, sizeof buf, &quot;LAP %02u/%02u&quot;, race.lap + (race.running ? 1 : 0), TOTAL_LAPS);
+  lcd.setCursor(8, 6); lcd.print(buf);
+  fmtTime(buf, sizeof buf, elapsedMs);
+  lcd.setCursor(290, 6); lcd.print(buf);
+
+  // Speed, large, one decimal
+  lcd.setTextSize(9);
+  snprintf(buf, sizeof buf, &quot;%4.1f&quot;, speedSmooth);
+  lcd.setCursor(4, 44); lcd.print(buf);
+  lcd.setTextSize(2);
+  lcd.setCursor(222, 44); lcd.print(&quot;km/h&quot;);
+
+  // Strategy cue box, reverse video while burning
+  Cue c = planCue();
+  if (c.burn) lcd.fillRect(300, 40, 96, 74, BLACK);
+  else        lcd.drawRect(300, 40, 96, 74, BLACK);
+  lcd.setTextColor(c.burn ? WHITE : BLACK);
+  lcd.setTextSize(3);
+  lcd.setCursor(306, 50); lcd.print(c.burn ? &quot;BURN&quot; : &quot;GLIDE&quot;);
+  lcd.setTextSize(2);
+  snprintf(buf, sizeof buf, &quot;%4.0fm&quot;, c.toNextM);
+  lcd.setCursor(318, 88); lcd.print(buf);
+  lcd.setTextColor(BLACK);
+
+  // Average vs required minimum, and last-lap delta to target
+  lcd.setTextSize(3);
+  snprintf(buf, sizeof buf, &quot;AVG %4.1f&quot;, avgKmh);
+  lcd.setCursor(8, 132); lcd.print(buf);
+  snprintf(buf, sizeof buf, &quot;MIN %4.1f&quot;, MIN_AVG_KMH);
+  lcd.setCursor(222, 132); lcd.print(buf);
+  if (race.lastLapMs) {
+    int32_t deltaMs = (int32_t)race.lastLapMs - (int32_t)TARGET_LAP_MS;
+    snprintf(buf, sizeof buf, &quot;LAST %+5.1fs&quot;, deltaMs / 1000.0f);
+    lcd.setCursor(8, 166); lcd.print(buf);
+  }
+  int32_t remS = (int32_t)TIME_LIMIT_S - (int32_t)(elapsedMs / 1000);
+  snprintf(buf, sizeof buf, &quot;REM %02ld:%02ld&quot;, (long)(remS / 60), (long)(labs(remS) % 60));
+  lcd.setCursor(222, 166); lcd.print(buf);
+
+  // Status line
+  lcd.setTextSize(2);
+  snprintf(buf, sizeof buf, &quot;%s %.2fV SAT%lu %s&quot;,
+           pace == BURN ? &quot;BURN &quot; : pace == COAST ? &quot;COAST&quot; : &quot;HOLD &quot;,
+           batteryVolts(), (unsigned long)gps.satellites.value(), sdOk ? &quot;LOG&quot; : &quot;NO SD&quot;);
+  lcd.setCursor(8, 218); lcd.print(buf);
+  lcd.refresh();   // also flips VCOM in the command byte (EXTMODE tied low)
+}
+
+void drawDiagPage() {
+  char buf[40];
+  lcd.clearDisplay();
+  lcd.setTextColor(BLACK);
+  lcd.setTextSize(2);
+  int y = 10;
+  auto line = [&amp;](const char* s) { lcd.setCursor(10, y); lcd.print(s); y += 24; };
+  snprintf(buf, sizeof buf, &quot;pulses %lu&quot;, (unsigned long)g_pulseCount);        line(buf);
+  snprintf(buf, sizeof buf, &quot;period %lu us&quot;, (unsigned long)g_periodUs);       line(buf);
+  snprintf(buf, sizeof buf, &quot;wheel %.1f  gps %.1f&quot;, speedKmh, gps.speed.kmph()); line(buf);
+  snprintf(buf, sizeof buf, &quot;dist %.1f m&quot;, distanceM());                       line(buf);
+  snprintf(buf, sizeof buf, &quot;lat %.5f&quot;, gps.location.lat());                   line(buf);
+  snprintf(buf, sizeof buf, &quot;lon %.5f&quot;, gps.location.lng());                   line(buf);
+  snprintf(buf, sizeof buf, &quot;hdop %.1f fix %d&quot;, gps.hdop.hdop(), gps.location.isValid()); line(buf);
+  snprintf(buf, sizeof buf, &quot;vbat %.2f V&quot;, batteryVolts());                    line(buf);
+  snprintf(buf, sizeof buf, &quot;sd %s  up %lus&quot;, sdOk ? &quot;ok&quot; : &quot;FAIL&quot;, (unsigned long)(millis() / 1000)); line(buf);
+  lcd.refresh();
+}
+
+// ---------------------------------------------------------------- logging
+void openLog() {
+  if (!SD.begin(PIN_SD_CS, SPI, 20000000)) { sdOk = false; return; }
+  char name[20];
+  for (int i = 0; i &lt; 999; i++) {
+    snprintf(name, sizeof name, &quot;/run%03d.csv&quot;, i);
+    if (!SD.exists(name)) break;
+  }
+  logFile = SD.open(name, FILE_WRITE);
+  sdOk = (bool)logFile;
+  if (sdOk) logFile.println(&quot;t_ms,speed_kmh,gps_kmh,dist_m,lap,lap_ms,lat,lon,sats,vbat,pace,plan_burn&quot;);
+}
+
+void logRow(uint32_t t) {
+  if (!sdOk) return;
+  logFile.printf(&quot;%lu,%.2f,%.2f,%.1f,%u,%lu,%.6f,%.6f,%lu,%.2f,%d,%d\n&quot;,
+                 (unsigned long)t, speedKmh, gps.speed.kmph(), distanceM(), race.lap,
+                 (unsigned long)(race.running ? millis() - race.lapStartMs : 0),
+                 gps.location.lat(), gps.location.lng(), (unsigned long)gps.satellites.value(),
+                 batteryVolts(), (int)pace, (int)planCue().burn);
+  static uint32_t lastFlush = 0;
+  if (millis() - lastFlush &gt; 2000) { logFile.flush(); lastFlush = millis(); }
+}
+
+// ---------------------------------------------------------------- setup / loop
+void setup() {
+  pinMode(PIN_PULSE, INPUT_PULLUP);
+  pinMode(PIN_BTN_LAP, INPUT_PULLUP);
+  pinMode(PIN_BTN_PAGE, INPUT_PULLUP);
+  pinMode(PIN_BTN_RESET, INPUT_PULLUP);
+  pinMode(PIN_LED_R, OUTPUT);
+  pinMode(PIN_LED_G, OUTPUT);
+  pinMode(PIN_LCD_DISP, OUTPUT);
+  digitalWrite(PIN_LCD_DISP, LOW);           // blank until the first frame is drawn
+  analogSetPinAttenuation(PIN_VBAT, ADC_11db);
+
+  attachInterrupt(digitalPinToInterrupt(PIN_PULSE), onWheelPulse, FALLING);
+
+  SPI.begin(PIN_SCK, PIN_MISO, PIN_MOSI);
+  lcd.begin();
+  lcd.clearDisplay();
+  lcd.refresh();
+  digitalWrite(PIN_LCD_DISP, HIGH);
+
+  gpsSerial.begin(115200, SERIAL_8N1, PIN_GPS_RX, PIN_GPS_TX);
+  openLog();
+
+  // Power-on self test: both LEDs for 500 ms
+  setPaceLed(HOLD); delay(500); setPaceLed(COAST);
+
+  // If the loop ever stalls, reboot rather than freeze the display with DC
+  // across the panel. Race state is rebuilt from the next lap button press.
+  enableLoopWDT();
+}
+
+void loop() {
+  static uint32_t lastTick = 0, lastDraw = 0;
+
+  while (gpsSerial.available()) gps.encode(gpsSerial.read());
+
+  btnLap.update(); btnPage.update(); btnReset.update();
+  if (btnLap.take())   markLap();
+  if (btnPage.take())  page ^= 1;
+  if (btnReset.take()) { race = RaceState(); pace = HOLD; }
+
+  uint32_t now = millis();
+  if (now - lastTick &gt;= 100) {               // 10 Hz control and logging
+    lastTick = now;
+    speedKmh = wheelSpeedKmh();
+    speedSmooth += 0.3f * (speedKmh - speedSmooth);
+
+    checkGpsLap();
+
+    uint32_t elapsedMs = race.running ? now - race.startMs
+                       : race.finished ? race.finishMs - race.startMs : 0;
+    float avgKmh = (elapsedMs &gt; 5000)
+                   ? (distanceM() - race.distStartM) / 1000.0f / (elapsedMs / 3600000.0f) : 0;
+    if (race.finished) avgKmh = TOTAL_LAPS * LAP_M / 1000.0f / (elapsedMs / 3600000.0f);
+    pace = computePace(avgKmh);
+    setPaceLed(pace);
+    logRow(now);
+
+    if (now - lastDraw &gt;= 250) {             // 4 Hz refresh is plenty for a memory LCD
+      lastDraw = now;
+      if (page == 0) drawRacePage(avgKmh, elapsedMs); else drawDiagPage();
+    }
+  }
+}
+</pre></details>
+<details><summary>test/speed_logic_test.py <code>bench test points</code></summary><pre>&quot;&quot;&quot;Bench model of the pulse-period speed calculation and the pace logic.
+Run before flashing to sanity-check config values: python3 test/speed_logic_test.py&quot;&quot;&quot;
+
+WHEEL_CIRC_M, MAGNETS = 1.60, 4
+LAP_M, LAPS, LIMIT_S = 1500, 10, 36 * 60
+MIN_PERIOD_US = 15000
+
+
+def speed_kmh(period_us):
+    return (WHEEL_CIRC_M / MAGNETS) / (period_us * 1e-6) * 3.6
+
+
+def pulse_hz(kmh):
+    return (kmh / 3.6) / (WHEEL_CIRC_M / MAGNETS)
+
+
+# 1. Decoding is exact and the bounce filter does not clip real speeds
+for kmh in (5, 15, 25, 35, 60):
+    period = 1e6 / pulse_hz(kmh)
+    assert abs(speed_kmh(period) - kmh) &lt; 1e-9
+    assert period &gt; MIN_PERIOD_US, f&quot;{kmh} km/h would be rejected as bounce&quot;
+    print(f&quot;{kmh:&gt;3} km/h -&gt; {pulse_hz(kmh):6.2f} Hz on the signal generator, period {period:8.0f} us&quot;)
+
+# 2. Resolution: one microsecond of timer jitter at 35 km/h
+p = 1e6 / pulse_hz(35)
+print(f&quot;resolution at 35 km/h: {speed_kmh(p) - speed_kmh(p + 1):.5f} km/h per us&quot;)
+
+# 3. Pace logic: projected finish against the limit
+def margin(elapsed_s, dist_m):
+    avg = dist_m / elapsed_s
+    return LIMIT_S - (elapsed_s + (LAPS * LAP_M - dist_m) / avg)
+
+min_avg = LAPS * LAP_M / 1000 / (LIMIT_S / 3600)
+print(f&quot;minimum average {min_avg:.2f} km/h&quot;)
+assert abs(margin(600, 600 * min_avg / 3.6)) &lt; 1e-6       # exactly on the limit
+assert margin(600, 600 * 26 / 3.6) &gt; 60                    # 26 km/h: coast
+assert margin(600, 600 * 24 / 3.6) &lt; 0                     # 24 km/h: burn
+print(&quot;all checks passed&quot;)
+</pre></details>
+</section>
+</main>
+
+<footer><span>Pin assignments checked against the ESP32-S3-DevKitC-1 pinout; library calls would be confirmed on the bench before building.</span><span>S. Oruganti, EEE first year, Imperial College London</span></footer>
+</div>
+
+</body></html>
